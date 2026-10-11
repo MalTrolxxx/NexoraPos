@@ -1,10 +1,13 @@
 package com.nexora.pos.producto;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,4 +42,13 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
     /** Lo que hay que resurtir, empezando por lo más agotado. */
     @Query("select p from Producto p where p.activo = true and p.stock <= p.stockMinimo order by p.stock")
     List<Producto> findBajoStock();
+
+    /**
+     * SELECT ... FOR UPDATE: bloquea estos productos hasta que termine la transacción, para que dos cajas
+     * que cobran el mismo producto a la vez se formen (milisegundos) en vez de vender stock que no existe.
+     * Se bloquean siempre en orden de id: así dos cobros nunca se esperan mutuamente (deadlock).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Producto p where p.id in :ids order by p.id")
+    List<Producto> bloquearParaActualizar(Collection<Long> ids);
 }

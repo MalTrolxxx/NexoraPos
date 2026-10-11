@@ -5,6 +5,7 @@ import com.nexora.pos.producto.dto.ProductoResponse;
 import com.nexora.pos.shared.Pagina;
 import com.nexora.pos.shared.ReglaDeNegocioException;
 import com.nexora.pos.shared.ResourceNotFoundException;
+import com.nexora.pos.shared.SolicitudInvalidaException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Reglas de negocio del catálogo. El controlador solo delega aquí; nunca llama al repositorio
@@ -23,9 +25,18 @@ import java.util.Locale;
 @Transactional(readOnly = true) // por defecto todo es de solo lectura; los métodos que escriben lo marcan explícitamente
 public class ProductoService {
 
+    /** Campos por los que se permite ordenar el listado: cualquier otro es un 400, no un error 500 de Hibernate. */
+    private static final Set<String> ORDENABLES = Set.of("nombre", "precio", "stock", "codigoBarras", "creadoEn");
+
     private final ProductoRepository repository;
 
     public Pagina<ProductoResponse> buscar(String q, boolean incluirInactivos, Pageable pageable) {
+        pageable.getSort().forEach(orden -> {
+            if (!ORDENABLES.contains(orden.getProperty())) {
+                throw new SolicitudInvalidaException("No se puede ordenar por \"" + orden.getProperty()
+                        + "\". Opciones: " + String.join(", ", ORDENABLES));
+            }
+        });
         String filtro = (q == null || q.isBlank()) ? null : q.trim().toLowerCase(Locale.ROOT);
         return Pagina.de(repository.buscar(filtro, incluirInactivos, pageable).map(ProductoResponse::from));
     }

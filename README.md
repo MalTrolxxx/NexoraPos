@@ -29,13 +29,41 @@ Venta
 - **Búsqueda rápida**: `GET /api/productos?q=coca&page=0&size=20`, por parte del nombre o por código, siempre paginada.
 - **Resurtido**: `POST /api/productos/{id}/entradas` y `GET /api/productos/bajo-stock`.
 
+## Flujo en caja
+
+```
+POST /api/ventas                          {"clienteId": 3}            ← opcional; sin body = público en general
+POST /api/ventas/{id}/detalles            {"codigoBarras": "750..."}  ← cada escaneo (cantidad 1 por defecto)
+POST /api/ventas/{id}/detalles            {"productoId": 8, "cantidad": 0.250}   ← granel
+PUT  /api/ventas/{id}/detalles/{linea}    {"cantidad": 3}
+DELETE /api/ventas/{id}/detalles/{linea}
+POST /api/ventas/{id}/cobro               {"metodoPago": "EFECTIVO", "pagoCon": 200}   → devuelve el cambio
+POST /api/ventas/{id}/cancelar
+GET  /api/ventas/abiertas?clienteId=3     ← ventas en espera
+GET  /api/ventas/corte?fecha=2026-10-11   ← corte de caja (sin fecha = hoy)
+```
+
+## Decisiones de rendimiento
+
+| Problema | Solución |
+|---|---|
+| Buscar el producto escaneado | Índice único en `codigo_barras`: búsqueda directa, no recorre la tabla |
+| Catálogos grandes | Toda búsqueda es paginada (máximo 100 por página) |
+| N+1 consultas al abrir una venta | `@EntityGraph`: venta + cliente + líneas en una sola consulta |
+| Listar ventas en espera | Proyección `select new ...` a DTO con el total ya guardado: no carga las líneas |
+| Corte de caja | `GROUP BY` en la base de datos + índice `(estado, cerrada_en)` |
+| Dos cajas cobrando el mismo producto | `SELECT ... FOR UPDATE` en orden de id: se forman, no se venden existencias fantasma ni hay deadlocks |
+| Dos personas editando lo mismo | `@Version` (bloqueo optimista) → 409 en vez de pisar cambios |
+| Relaciones LAZY recorridas en ciclo | `default_batch_fetch_size=50`: carga en lotes como red de seguridad |
+| "Hoy" en el servidor ≠ "hoy" en la tienda | `nexora.zona-horaria` define el día del corte |
+
 ## Módulos
 
 | Módulo     | Estado       |
 |------------|--------------|
 | Producto   | ✅ Hecho (código de barras, granel por kilo, búsqueda paginada, resurtido, bajo stock) |
 | Cliente    | ✅ Hecho (alta/edición/consulta, tests) |
-| Venta      | 🔜 Pendiente (depende de Producto y Cliente) |
+| Venta      | ✅ Hecho (ventas en espera, granel, cobro con cambio, cancelación, corte de caja) |
 
 ## Arquitectura
 

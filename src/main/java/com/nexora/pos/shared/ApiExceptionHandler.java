@@ -1,7 +1,6 @@
 package com.nexora.pos.shared;
 
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -62,10 +61,9 @@ public class ApiExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, "El cuerpo de la petición no es válido");
     }
 
-    /** `?sort=campoQueNoExiste` en un listado paginado. */
-    @ExceptionHandler(PropertyReferenceException.class)
-    public ResponseEntity<ErrorResponse> handleOrdenInvalido(PropertyReferenceException ex) {
-        return error(HttpStatus.BAD_REQUEST, "No se puede ordenar por \"" + ex.getPropertyName() + "\"");
+    @ExceptionHandler(SolicitudInvalidaException.class)
+    public ResponseEntity<ErrorResponse> handleSolicitudInvalida(SolicitudInvalidaException ex) {
+        return error(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     private static ResponseEntity<ErrorResponse> error(HttpStatus status, String mensaje) {
