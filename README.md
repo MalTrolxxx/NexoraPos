@@ -21,11 +21,19 @@ Venta
  └─ DetalleVenta[] (producto, cantidad, precio unitario al momento de agregarlo)
 ```
 
+## Pensado para abarrotes
+
+- **Lector de código de barras**: `GET /api/productos/codigo/{codigo}` va directo a un índice único.
+- **Granel**: cada producto se vende por `PIEZA` o por `KILO`. El stock es decimal (gramos),
+  y la entidad rechaza cosas sin sentido como vender 1.5 refrescos.
+- **Búsqueda rápida**: `GET /api/productos?q=coca&page=0&size=20`, por parte del nombre o por código, siempre paginada.
+- **Resurtido**: `POST /api/productos/{id}/entradas` y `GET /api/productos/bajo-stock`.
+
 ## Módulos
 
 | Módulo     | Estado       |
 |------------|--------------|
-| Producto   | ✅ Hecho (entidad, CRUD, tests) |
+| Producto   | ✅ Hecho (código de barras, granel por kilo, búsqueda paginada, resurtido, bajo stock) |
 | Cliente    | ✅ Hecho (alta/edición/consulta, tests) |
 | Venta      | 🔜 Pendiente (depende de Producto y Cliente) |
 

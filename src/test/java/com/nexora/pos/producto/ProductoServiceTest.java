@@ -32,13 +32,15 @@ class ProductoServiceTest {
     @InjectMocks
     private ProductoService service;
 
+    private static ProductoRequest agua(String codigo) {
+        return new ProductoRequest(codigo, "Agua 600ml", UnidadVenta.PIEZA, new BigDecimal("15.00"), null, new BigDecimal("10"), null);
+    }
+
     @Test
     void no_permite_crear_un_producto_con_nombre_repetido() {
         when(repository.existsByNombreIgnoreCase("Agua 600ml")).thenReturn(true);
 
-        var request = new ProductoRequest("Agua 600ml", new BigDecimal("15.00"), 10);
-
-        assertThatThrownBy(() -> service.crear(request))
+        assertThatThrownBy(() -> service.crear(agua(null)))
                 .isInstanceOf(ReglaDeNegocioException.class)
                 .hasMessageContaining("Agua 600ml");
 
@@ -46,15 +48,47 @@ class ProductoServiceTest {
     }
 
     @Test
-    void crea_el_producto_cuando_el_nombre_no_existe() {
-        when(repository.existsByNombreIgnoreCase("Agua 600ml")).thenReturn(false);
+    void no_permite_crear_un_producto_con_codigo_repetido() {
+        when(repository.existsByCodigoBarras("7501055300075")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.crear(agua("7501055300075")))
+                .isInstanceOf(ReglaDeNegocioException.class)
+                .hasMessageContaining("7501055300075");
+
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void crea_el_producto_con_stock_minimo_en_cero_si_no_se_indica() {
         when(repository.save(any(Producto.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new ProductoRequest("Agua 600ml", new BigDecimal("15.00"), 10);
-        var creado = service.crear(request);
+        var creado = service.crear(agua("  "));
 
         assertThat(creado.nombre()).isEqualTo("Agua 600ml");
-        assertThat(creado.stock()).isEqualTo(10);
+        assertThat(creado.codigoBarras()).isNull();
+        assertThat(creado.stock()).isEqualByComparingTo("10");
+        assertThat(creado.stockMinimo()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void no_permite_renombrar_un_producto_con_el_nombre_de_otro() {
+        var producto = new Producto("Agua 1L", UnidadVenta.PIEZA, new BigDecimal("20.00"), BigDecimal.ONE);
+        when(repository.findById(1L)).thenReturn(Optional.of(producto));
+        when(repository.existsByNombreIgnoreCaseAndIdNot("Agua 600ml", 1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.actualizar(1L, agua(null)))
+                .isInstanceOf(ReglaDeNegocioException.class);
+        assertThat(producto.getNombre()).isEqualTo("Agua 1L");
+    }
+
+    @Test
+    void registrar_entrada_suma_al_stock() {
+        var producto = new Producto("Agua 600ml", UnidadVenta.PIEZA, new BigDecimal("15.00"), new BigDecimal("3"));
+        when(repository.findById(1L)).thenReturn(Optional.of(producto));
+
+        var actualizado = service.registrarEntrada(1L, new BigDecimal("24"));
+
+        assertThat(actualizado.stock()).isEqualByComparingTo("27");
     }
 
     @Test

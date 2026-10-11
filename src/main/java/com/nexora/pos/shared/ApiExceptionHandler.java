@@ -1,7 +1,11 @@
 package com.nexora.pos.shared;
 
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,12 +23,27 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.of(HttpStatus.NOT_FOUND, ex.getMessage()));
+        return error(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(ReglaDeNegocioException.class)
     public ResponseEntity<ErrorResponse> handleReglaNegocio(ReglaDeNegocioException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.of(HttpStatus.CONFLICT, ex.getMessage()));
+        return error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /** Dos cajeros modificaron lo mismo a la vez (@Version): el segundo debe reintentar con datos frescos. */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleConcurrencia(ObjectOptimisticLockingFailureException ex) {
+        return error(HttpStatus.CONFLICT, "Otro usuario modificó este registro al mismo tiempo; vuelve a intentarlo");
+    }
+
+    /**
+     * Red de seguridad: los servicios validan los datos únicos antes de guardar, pero si dos peticiones
+     * llegan al mismo tiempo ambas pasan la validación y el índice único de la BD frena a la segunda.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleIntegridad(DataIntegrityViolationException ex) {
+        return error(HttpStatus.CONFLICT, "El dato ya existe o choca con otro registro");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -35,5 +54,21 @@ public class ApiExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(HttpStatus.BAD_REQUEST, "Datos inválidos", errores));
+    }
+
+    /** JSON mal formado o un valor que no existe en un enum (p. ej. "unidad": "LITRO"). */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleJsonInvalido(HttpMessageNotReadableException ex) {
+        return error(HttpStatus.BAD_REQUEST, "El cuerpo de la petición no es válido");
+    }
+
+    /** `?sort=campoQueNoExiste` en un listado paginado. */
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ResponseEntity<ErrorResponse> handleOrdenInvalido(PropertyReferenceException ex) {
+        return error(HttpStatus.BAD_REQUEST, "No se puede ordenar por \"" + ex.getPropertyName() + "\"");
+    }
+
+    private static ResponseEntity<ErrorResponse> error(HttpStatus status, String mensaje) {
+        return ResponseEntity.status(status).body(ErrorResponse.of(status, mensaje));
     }
 }
