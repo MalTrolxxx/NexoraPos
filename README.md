@@ -26,7 +26,7 @@ Venta
 | Módulo     | Estado       |
 |------------|--------------|
 | Producto   | ✅ Hecho (entidad, CRUD, tests) |
-| Cliente    | 🔜 En construcción |
+| Cliente    | ✅ Hecho (alta/edición/consulta, tests) |
 | Venta      | 🔜 Pendiente (depende de Producto y Cliente) |
 
 ## Arquitectura
